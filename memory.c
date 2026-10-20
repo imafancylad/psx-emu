@@ -1,58 +1,171 @@
 #include "memory.h"
 
+#include <stdio.h>
 #include <string.h>
+
+#define RAM_PHYSICAL_LIMIT 0x00800000u
+#define KSEG_PHYSICAL_MASK 0x1FFFFFFFu
+
+static uint32_t normalize_address(uint32_t address)
+{
+    if (address >= 0x80000000u && address <= 0xBFFFFFFFu)
+    {
+        return address & KSEG_PHYSICAL_MASK;
+    }
+
+    return address;
+}
+
+static bool translate_ram_address(uint32_t address, uint32_t *offset)
+{
+    address = normalize_address(address);
+
+    if (address >= RAM_PHYSICAL_LIMIT)
+    {
+        return false;
+    }
+
+    *offset = address % RAM_SIZE;
+    return true;
+}
+
+static bool translate_bios_address(uint32_t address, uint32_t *offset)
+{
+    address = normalize_address(address);
+
+    if (address < BIOS_PHYSICAL_START || address >= BIOS_PHYSICAL_END)
+    {
+        return false;
+    }
+
+    *offset = address - BIOS_PHYSICAL_START;
+    return true;
+}
 
 void memory_init(Memory *memory)
 {
-    memset(memory->data, 0, sizeof(memory->data));
+    memset(memory, 0, sizeof(*memory));
+}
+
+bool memory_load_bios(Memory *memory, const char *path)
+{
+    FILE *file = fopen(path, "rb");
+
+    if (file == NULL)
+    {
+        return false;
+    }
+
+    // Check that the BIOS file has the expected size
+    if (fseek(file, 0, SEEK_END) != 0)
+    {
+        fclose(file);
+        return false;
+    }
+
+    long file_size = ftell(file);
+
+    if (file_size != (long)BIOS_SIZE)
+    {
+        fclose(file);
+        return false;
+    }
+
+    if (fseek(file, 0, SEEK_SET) != 0)
+    {
+        fclose(file);
+        return false;
+    }
+
+    size_t bytes_read = fread(memory->bios, 1, BIOS_SIZE, file);
+    bool success = bytes_read == BIOS_SIZE;
+
+    if (fclose(file) != 0)
+    {
+        success = false;
+    }
+
+    return success;
 }
 
 bool memory_read8(const Memory *memory, uint32_t address, uint8_t *value)
 {
-    if (address >= RAM_SIZE)
+    uint32_t offset;
+
+    if (translate_ram_address(address, &offset))
     {
-        return false;
+        *value = memory->data[offset];
+        return true;
     }
 
-    *value = memory->data[address];
+    if (translate_bios_address(address, &offset))
+    {
+        *value = memory->bios[offset];
+        return true;
+    }
 
-    return true;
+    return false;
 }
 
 bool memory_write8(Memory *memory, uint32_t address, uint8_t value)
 {
-    if (address >= RAM_SIZE)
+    uint32_t offset;
+
+    if (!translate_ram_address(address, &offset))
     {
+        /*
+         * The BIOS and unimplemented regions are read-only
+         * or unavailable in this memory model.
+         */
         return false;
     }
 
-    memory->data[address] = value;
+    memory->data[offset] = value;
 
     return true;
 }
 
 bool memory_read32(const Memory *memory, uint32_t address, uint32_t *value)
 {
-    if (address > RAM_SIZE - 4 || address % 4 != 0)
+    if ((address & 0x3u) != 0)
     {
         return false;
     }
 
-    *value = (uint32_t)memory->data[address] | ((uint32_t)memory->data[address + 1] << 8) | ((uint32_t)memory->data[address + 2] << 16) | ((uint32_t)memory->data[address + 3] << 24);
+    uint8_t b0;
+    uint8_t b1;
+    uint8_t b2;
+    uint8_t b3;
+
+    if (!memory_read8(memory, address, &b0) || !memory_read8(memory, address + 1, &b1) || !memory_read8(memory, address + 2, &b2) || !memory_read8(memory, address + 3, &b3))
+    {
+        return false;
+    }
+
+    *value = (uint32_t)b0 | ((uint32_t)b1 << 8) | ((uint32_t)b2 << 16) | ((uint32_t)b3 << 24);
+
     return true;
 }
 
 bool memory_write32(Memory *memory, uint32_t address, uint32_t value)
 {
-    if (address > RAM_SIZE - 4 || address % 4 != 0)
+    if ((address & 0x3u) != 0)
     {
         return false;
     }
 
-    memory->data[address] = (uint8_t)(value & 0xFF);
-    memory->data[address + 1] = (uint8_t)((value >> 8) & 0xFF);
-    memory->data[address + 2] = (uint8_t)((value >> 16) & 0xFF);
-    memory->data[address + 3] = (uint8_t)((value >> 24) & 0xFF);
+    // Validate the entire word before writing any bytes
+    uint32_t offset;
+
+    if (!translate_ram_address(address, &offset) || offset > RAM_SIZE - 4)
+    {
+        return false;
+    }
+
+    memory->data[offset] = (uint8_t)(value & 0xFFu);
+    memory->data[offset + 1] = (uint8_t)((value >> 8) & 0xFFu);
+    memory->data[offset + 2] = (uint8_t)((value >> 16) & 0xFFu);
+    memory->data[offset + 3] = (uint8_t)((value >> 24) & 0xFFu);
 
     return true;
 }

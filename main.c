@@ -5,12 +5,39 @@
 
 #define MAX_STEPS 100
 
-int main(void)
+int main(int argc, char *argv[])
 {
     CPU cpu;
     Memory memory;
     memory_init(&memory);
     cpu_init(&cpu);
+
+    bool bios_loaded = false;
+    uint32_t bios_first_instruction = 0;
+
+    if (argc > 2)
+    {
+        fprintf(stderr, "Usage: %s [bios_file]\n", argv[0]);
+        return 1;
+    }
+
+    if (argc == 2)
+    {
+        if (!memory_load_bios(&memory, argv[1]))
+        {
+            fprintf(stderr, "Failed to load BIOS file.\n");
+            fprintf(stderr, "Expected a valid 512 KiB BIOS image.\n");
+            return 1;
+        }
+
+        if (!memory_read32(&memory, 0xBFC00000, &bios_first_instruction))
+        {
+            fprintf(stderr, "Failed to read BIOS entry point.\n");
+            return 1;
+        }
+
+        bios_loaded = true;
+    }
 
     const uint32_t program[] =
     {
@@ -58,7 +85,28 @@ int main(void)
         steps++;
     }
 
+    uint32_t value_kseg0 = 0;
+    uint32_t value_kseg1 = 0;
+    uint32_t value_mirror = 0;
+
+    bool memory_alias_test =
+        memory_write32(&memory, 0x00000100, 0xDEADBEEF) &&
+        memory_read32(&memory, 0x80000100, &value_kseg0) &&
+        memory_read32(&memory, 0xA0000100, &value_kseg1) &&
+        memory_read32(&memory, 0x00200100, &value_mirror);
+
+    printf("KSEG0 read: 0x%08X\n", (unsigned int)value_kseg0);
+    printf("KSEG1 read: 0x%08X\n", (unsigned int)value_kseg1);
+    printf("RAM mirror read: 0x%08X\n", (unsigned int)value_mirror);
+
     printf("PSX emulator\n");
+
+    if (bios_loaded)
+    {
+        printf("BIOS loaded successfully.\n");
+        printf("BIOS entry instruction: 0x%08X\n", (unsigned int)bios_first_instruction);
+    }
+
     printf("Register t0: %u\n", (unsigned int)cpu.r[8]);
     printf("Register t1: %u\n", (unsigned int)cpu.r[9]);
     printf("Register t2: %u\n", (unsigned int)cpu.r[10]);
@@ -84,7 +132,8 @@ int main(void)
         cpu.r[17] != 55 ||
         cpu.pc != program_size ||
         steps != 12 ||
-        cpu.branch_pending)
+        cpu.branch_pending ||
+        !memory_alias_test)
     {
         fprintf(stderr, "CPU test failed.\n");
         return 1;
