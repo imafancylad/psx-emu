@@ -105,6 +105,12 @@ bool memory_read8(const Memory *memory, uint32_t address, uint8_t *value)
 
     uint32_t physical_address = normalize_address(address);
 
+    if (physical_address >= EXP1_MEMORY_START && physical_address < EXP1_MEMORY_END)
+    {
+        *value = 0;
+        return true;
+    }
+
     if (physical_address >= SPU_REGISTERS_START && physical_address < SPU_REGISTERS_END)
     {
         uint32_t spu_offset = physical_address - SPU_REGISTERS_START;
@@ -119,6 +125,12 @@ bool memory_read8(const Memory *memory, uint32_t address, uint8_t *value)
             *value = (uint8_t)((reg >> 8) & 0xFFu);
         }
 
+        return true;
+    }
+
+    if (physical_address >= EXP2_MEMORY_START && physical_address < EXP2_MEMORY_END)
+    {
+        *value = memory->exp2_memory[physical_address - EXP2_MEMORY_START];
         return true;
     }
 
@@ -146,8 +158,12 @@ bool memory_read8(const Memory *memory, uint32_t address, uint8_t *value)
 bool memory_write8(Memory *memory, uint32_t address, uint8_t value)
 {
     uint32_t offset;
-
     uint32_t physical_address = normalize_address(address);
+
+    if (physical_address >= EXP1_MEMORY_START && physical_address < EXP1_MEMORY_END)
+    {
+        return true;
+    }
 
     if (physical_address >= SPU_REGISTERS_START && physical_address < SPU_REGISTERS_END)
     {
@@ -163,6 +179,12 @@ bool memory_write8(Memory *memory, uint32_t address, uint8_t value)
             *reg = (uint16_t)((*reg & 0x00FFu) | ((uint16_t)value << 8));
         }
 
+        return true;
+    }
+
+    if (physical_address >= EXP2_MEMORY_START && physical_address < EXP2_MEMORY_END)
+    {
+        memory->exp2_memory[physical_address - EXP2_MEMORY_START] = value;
         return true;
     }
 

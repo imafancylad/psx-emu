@@ -90,6 +90,12 @@ int main(int argc, char *argv[])
         while (steps < MAX_STEPS)
         {
             uint32_t current_pc = cpu.pc;
+
+            if (current_pc >= 0xBFC03990 && current_pc <= 0xBFC039B0)
+            {
+                printf("FUNCTION TRACE: PC=0x%08X\n", (unsigned int)current_pc);
+            }
+
             uint32_t instruction = 0;
 
             if (!memory_read32(&memory, current_pc, &instruction))
@@ -108,6 +114,17 @@ int main(int argc, char *argv[])
                 printf("Reason: unsupported instruction or execution error.\n");
                 printf("PC: 0x%08X\n", (unsigned int)current_pc);
                 printf("Instruction: 0x%08X\n", (unsigned int)instruction);
+                printf("Last executed instructions:\n");
+
+                uint32_t trace_count = steps + 1 < TRACE_COUNT ? steps + 1 : TRACE_COUNT;
+                uint32_t first_step = steps + 1 - trace_count;
+
+                for (uint32_t i = first_step; i <= steps; i++)
+                {
+                    uint32_t index = i % TRACE_COUNT;
+                    printf("Step %u: PC=0x%08X Instruction=0x%08X\n", (unsigned int)(i + 1), (unsigned int)trace_pc[index], (unsigned int)trace_instruction[index]);
+                }
+
                 break;
             }
 

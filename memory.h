@@ -30,6 +30,13 @@
 #define COMMON_DELAY_ADDRESS 0x1F801020u
 #define DRAM_CTRL_ADDRESS  0x1F801060u
 
+#define EXP2_MEMORY_START 0x1F802000u
+#define EXP2_MEMORY_END   0x1F804000u
+#define EXP2_MEMORY_SIZE  (EXP2_MEMORY_END - EXP2_MEMORY_START)
+
+#define EXP1_MEMORY_START 0x1F000000u
+#define EXP1_MEMORY_END   0x1F800000u
+
 /* DMA registers */
 #define DMA0_MADR_ADDRESS 0x1F801080u
 #define DMA0_BCR_ADDRESS  0x1F801084u
@@ -41,6 +48,8 @@ typedef struct {
     uint8_t data[RAM_SIZE];
     uint8_t bios[BIOS_SIZE];
     uint8_t scratchpad[SCRATCHPAD_SIZE];
+    uint8_t exp2_memory[EXP2_MEMORY_SIZE];
+
     uint16_t spu_registers[SPU_REGISTERS_COUNT];
 
     uint32_t exp1_base;

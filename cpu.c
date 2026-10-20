@@ -4,16 +4,22 @@
 #include <stdio.h>
 
 #define OPCODE_SPECIAL 0x00
+// #define OPCODE_BCOND   0x01
 #define OPCODE_J       0x02
 #define OPCODE_JAL     0x03
 #define OPCODE_BEQ     0x04
 #define OPCODE_BNE     0x05
-#define OPCODE_ANDI    0x0C
-#define OPCODE_LUI     0x0F
-#define OPCODE_ORI     0x0D
+// #define OPCODE_BLEZ    0x06
 #define OPCODE_ADDI    0x08
 #define OPCODE_ADDIU   0x09
+// #define OPCODE_SLTI    0x0A
+// #define OPCODE_SLTIU   0x0B
+#define OPCODE_ANDI    0x0C
+#define OPCODE_ORI     0x0D
+// #define OPCODE_XORI    0x0E
+#define OPCODE_LUI     0x0F
 #define OPCODE_COP0    0x10
+#define OPCODE_LB      0x20
 #define OPCODE_LW      0x23
 #define OPCODE_SB      0x28
 #define OPCODE_SH      0x29
@@ -25,6 +31,7 @@
 #define FUNCT_AND  0x24
 #define FUNCT_OR   0x25
 #define FUNCT_SLTU 0x2B
+#define FUNCT_JR   0x08
 
 static int32_t sign_extend_16(uint16_t value)
 {
@@ -132,6 +139,24 @@ bool cpu_step(CPU *cpu, Memory *memory)
                 return false;
             }
 
+            break;
+        }
+
+        case OPCODE_LB:
+        {
+            int32_t signed_offset = sign_extend_16(immediate);
+            uint32_t address = cpu->r[rs] + (uint32_t)signed_offset;
+            uint8_t value;
+
+            if (!memory_read8(memory, address, &value))
+            {
+                fprintf(stderr, "LB failed.\n");
+                fprintf(stderr, "PC: 0x%08X\n", (unsigned int)(cpu->pc - 4));
+                fprintf(stderr, "Address: 0x%08X\n", (unsigned int)address);
+                return false;
+            }
+
+            cpu->r[rt] = (uint32_t)(int32_t)(int8_t)value;
             break;
         }
         
@@ -270,6 +295,18 @@ bool cpu_step(CPU *cpu, Memory *memory)
         {
             switch (funct)
             {
+                case FUNCT_JR:
+                {
+                    if (was_delay_slot)
+                    {
+                        return false;
+                    }
+
+                    cpu->branch_target = cpu->r[rs];
+                    cpu->branch_pending = true;
+                    break;
+                }
+
                 case FUNCT_SLL:
                     if (rs != 0)
                     {
