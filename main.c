@@ -3,7 +3,8 @@
 #include "cpu.h"
 #include "memory.h"
 
-#define MAX_STEPS 100
+#define MAX_STEPS 12000000
+#define TRACE_COUNT 32
 
 int main(int argc, char *argv[])
 {
@@ -76,6 +77,9 @@ int main(int argc, char *argv[])
 
     uint32_t steps = 0;
 
+    uint32_t trace_pc[TRACE_COUNT] = {0};
+    uint32_t trace_instruction[TRACE_COUNT] = {0};
+
     if (bios_loaded)
     {
         cpu.pc = 0xBFC00000;
@@ -95,6 +99,9 @@ int main(int argc, char *argv[])
                 return 1;
             }
 
+            trace_pc[steps % TRACE_COUNT] = current_pc;
+            trace_instruction[steps % TRACE_COUNT] = instruction;
+
             if (!cpu_step(&cpu, &memory))
             {
                 printf("BIOS execution stopped.\n");
@@ -110,12 +117,23 @@ int main(int argc, char *argv[])
         if (steps == MAX_STEPS)
         {
             printf("BIOS execution stopped: step limit reached.\n");
+            printf("Last executed instructions:\n");
+
+            uint32_t first_step = steps > TRACE_COUNT ? steps - TRACE_COUNT : 0;
+
+            for (uint32_t i = first_step; i < steps; i++)
+            {
+                uint32_t index = i % TRACE_COUNT;
+                printf("Step %u: PC=0x%08X Instruction=0x%08X\n", (unsigned int)(i + 1), (unsigned int)trace_pc[index], (unsigned int)trace_instruction[index]);
+            }
         }
 
         printf("Instructions executed: %u\n", (unsigned int)steps);
         printf("Final PC: 0x%08X\n", (unsigned int)cpu.pc);
         printf("Register t0: 0x%08X\n", (unsigned int)cpu.r[8]);
         printf("Register at: 0x%08X\n", (unsigned int)cpu.r[1]);
+        printf("Register v0: 0x%08X\n", (unsigned int)cpu.r[2]);
+        printf("Register v1: 0x%08X\n", (unsigned int)cpu.r[3]);
 
         printf("DMA0 MADR: 0x%08X\n", (unsigned int)memory.dma0_madr);
         printf("DMA DPCR: 0x%08X\n", (unsigned int)memory.dma_dpcr);

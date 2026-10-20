@@ -7,9 +7,11 @@
 #include "memory.h"
 
 #define CPU_REGISTER_COUNT 32
+#define CP0_REGISTER_COUNT 32
 
 typedef struct {
     uint32_t r[CPU_REGISTER_COUNT];
+    uint32_t cp0[CP0_REGISTER_COUNT];
     uint32_t pc;
 
     bool branch_pending;

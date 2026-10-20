@@ -42,6 +42,17 @@ static bool translate_bios_address(uint32_t address, uint32_t *offset)
     return true;
 }
 
+static bool translate_scratchpad_address(uint32_t address, uint32_t *offset)
+{
+    if (address < SCRATCHPAD_START || address >= SCRATCHPAD_END)
+    {
+        return false;
+    }
+
+    *offset = address - SCRATCHPAD_START;
+    return true;
+}
+
 void memory_init(Memory *memory)
 {
     memset(memory, 0, sizeof(*memory));
@@ -92,6 +103,31 @@ bool memory_read8(const Memory *memory, uint32_t address, uint8_t *value)
 {
     uint32_t offset;
 
+    uint32_t physical_address = normalize_address(address);
+
+    if (physical_address >= SPU_REGISTERS_START && physical_address < SPU_REGISTERS_END)
+    {
+        uint32_t spu_offset = physical_address - SPU_REGISTERS_START;
+        uint16_t reg = memory->spu_registers[spu_offset / 2];
+
+        if ((spu_offset & 1u) == 0)
+        {
+            *value = (uint8_t)(reg & 0xFFu);
+        }
+        else
+        {
+            *value = (uint8_t)((reg >> 8) & 0xFFu);
+        }
+
+        return true;
+    }
+
+    if (translate_scratchpad_address(address, &offset))
+    {
+        *value = memory->scratchpad[offset];
+        return true;
+    }
+
     if (translate_ram_address(address, &offset))
     {
         *value = memory->data[offset];
@@ -111,6 +147,31 @@ bool memory_write8(Memory *memory, uint32_t address, uint8_t value)
 {
     uint32_t offset;
 
+    uint32_t physical_address = normalize_address(address);
+
+    if (physical_address >= SPU_REGISTERS_START && physical_address < SPU_REGISTERS_END)
+    {
+        uint32_t spu_offset = physical_address - SPU_REGISTERS_START;
+        uint16_t *reg = &memory->spu_registers[spu_offset / 2];
+
+        if ((spu_offset & 1u) == 0)
+        {
+            *reg = (uint16_t)((*reg & 0xFF00u) | value);
+        }
+        else
+        {
+            *reg = (uint16_t)((*reg & 0x00FFu) | ((uint16_t)value << 8));
+        }
+
+        return true;
+    }
+
+    if (translate_scratchpad_address(address, &offset))
+    {
+        memory->scratchpad[offset] = value;
+        return true;
+    }
+
     if (!translate_ram_address(address, &offset))
     {
         /*
@@ -121,6 +182,35 @@ bool memory_write8(Memory *memory, uint32_t address, uint8_t value)
     }
 
     memory->data[offset] = value;
+
+    return true;
+}
+
+bool memory_write16(Memory *memory, uint32_t address, uint16_t value)
+{
+    if ((address & 0x1u) != 0)
+    {
+        return false;
+    }
+
+    uint32_t physical_address = normalize_address(address);
+
+    if (physical_address >= SPU_REGISTERS_START && physical_address < SPU_REGISTERS_END)
+    {
+        uint32_t offset = physical_address - SPU_REGISTERS_START;
+        memory->spu_registers[offset / 2] = value;
+        return true;
+    }
+
+    if (!memory_write8(memory, address, (uint8_t)(value & 0xFFu)))
+    {
+        return false;
+    }
+
+    if (!memory_write8(memory, address + 1, (uint8_t)((value >> 8) & 0xFFu)))
+    {
+        return false;
+    }
 
     return true;
 }
@@ -190,6 +280,10 @@ bool memory_read32(const Memory *memory, uint32_t address, uint32_t *value)
 
         case DMA_DPCR_ADDRESS:
             *value = memory->dma_dpcr;
+            return true;
+
+        case BCC_ADDRESS:
+            *value = memory->bcc;
             return true;
 
         default:
@@ -278,12 +372,31 @@ bool memory_write32(Memory *memory, uint32_t address, uint32_t value)
             memory->dma_dpcr = value;
             return true;
 
+        case BCC_ADDRESS:
+            memory->bcc = value;
+            return true;
+
         default:
             break;
     }
 
     // Validate the entire word before writing any bytes
     uint32_t offset;
+
+    if (translate_scratchpad_address(address, &offset))
+    {
+        if (offset > SCRATCHPAD_SIZE - 4)
+        {
+            return false;
+        }
+    
+        memory->scratchpad[offset] = (uint8_t)(value & 0xFFu);
+        memory->scratchpad[offset + 1] = (uint8_t)((value >> 8) & 0xFFu);
+        memory->scratchpad[offset + 2] = (uint8_t)((value >> 16) & 0xFFu);
+        memory->scratchpad[offset + 3] = (uint8_t)((value >> 24) & 0xFFu);
+
+        return true;
+    }
 
     if (!translate_ram_address(address, &offset) || offset > RAM_SIZE - 4)
     {
