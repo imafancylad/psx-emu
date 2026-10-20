@@ -1,16 +1,19 @@
 #include "cpu.h"
 
 #include <string.h>
+#include <stdio.h>
 
 #define OPCODE_SPECIAL 0x00
 #define OPCODE_J       0x02
 #define OPCODE_BEQ     0x04
 #define OPCODE_BNE     0x05
 #define OPCODE_LUI     0x0F
+#define OPCODE_ORI     0x0D
 #define OPCODE_ADDIU   0x09
 #define OPCODE_LW      0x23
 #define OPCODE_SW      0x2B
 
+#define FUNCT_SLL  0x00
 #define FUNCT_ADDU 0x21
 #define FUNCT_SUBU 0x23
 #define FUNCT_AND  0x24
@@ -60,6 +63,7 @@ bool cpu_step(CPU *cpu, Memory *memory)
     uint32_t rs = (instruction >> 21) & 0x1F;
     uint32_t rt = (instruction >> 16) & 0x1F;
     uint32_t rd = (instruction >> 11) & 0x1F;
+    uint32_t shamt = (instruction >> 6) & 0x1F;
     uint16_t immediate = (uint16_t)(instruction & 0xFFFF);
     uint32_t funct = instruction & 0x3F;
 
@@ -76,6 +80,12 @@ bool cpu_step(CPU *cpu, Memory *memory)
         case OPCODE_LUI:
         {
             cpu->r[rt] = (uint32_t)immediate << 16;
+            break;
+        }
+
+        case OPCODE_ORI:
+        {
+            cpu->r[rt] = cpu->r[rs] | (instruction & 0xFFFF);
             break;
         }
 
@@ -99,6 +109,11 @@ bool cpu_step(CPU *cpu, Memory *memory)
 
             if (!memory_write32(memory, address, cpu->r[rt]))
             {
+                fprintf(stderr, "SW failed.\n");
+                fprintf(stderr, "PC: 0x%08X\n", (unsigned int)(cpu->pc - 4));
+                fprintf(stderr, "Address: 0x%08X\n", (unsigned int)address);
+                fprintf(stderr, "Value: 0x%08X\n", (unsigned int)cpu->r[rt]);
+                fprintf(stderr, "Base register: 0x%08X\n", (unsigned int)cpu->r[rs]);
                 return false;
             }
 
@@ -160,6 +175,15 @@ bool cpu_step(CPU *cpu, Memory *memory)
         {
             switch (funct)
             {
+                case FUNCT_SLL:
+                    if (rs != 0)
+                    {
+                        return false;
+                    }
+
+                    cpu->r[rd] = cpu->r[rt] << shamt;
+                    break;
+
                 case FUNCT_ADDU:
                     cpu->r[rd] = cpu->r[rs] + cpu->r[rt];
                     break;

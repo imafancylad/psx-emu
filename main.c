@@ -56,7 +56,10 @@ int main(int argc, char *argv[])
         0x0800000D,  /* j target_jump */
         0x240F0021,  /* addiu $t7, $zero, 33: delay slot */
         0x2410002C,  /* addiu $s0, $zero, 44: skipped */
-        0x24110037   /* target_jump: addiu $s1, $zero, 55 */
+        0x24110037,  /* target_jump: addiu $s1, $zero, 55 */
+
+        0x3C020013,  /* lui   $v0, 0x0013 */
+        0x3442243F   /* ori   $v0, $v0, 0x243F */
     };
 
     const uint32_t instruction_count = sizeof(program) / sizeof(program[0]);
@@ -73,16 +76,66 @@ int main(int argc, char *argv[])
 
     uint32_t steps = 0;
 
-    while (cpu.pc < program_size && steps < MAX_STEPS)
+    if (bios_loaded)
     {
-        if (!cpu_step(&cpu, &memory))
+        cpu.pc = 0xBFC00000;
+
+        printf("Starting BIOS execution.\n");
+        printf("Initial PC: 0x%08X\n", (unsigned int)cpu.pc);
+
+        while (steps < MAX_STEPS)
         {
-            fprintf(stderr, "Instruction execution failed.\n");
-            fprintf(stderr, "PC: 0x%08X\n", (unsigned int)cpu.pc);
-            return 1;
+            uint32_t current_pc = cpu.pc;
+            uint32_t instruction = 0;
+
+            if (!memory_read32(&memory, current_pc, &instruction))
+            {
+                fprintf(stderr, "Failed to fetch BIOS instruction.\n");
+                fprintf(stderr, "PC: 0x%08X\n", (unsigned int)current_pc);
+                return 1;
+            }
+
+            if (!cpu_step(&cpu, &memory))
+            {
+                printf("BIOS execution stopped.\n");
+                printf("Reason: unsupported instruction or execution error.\n");
+                printf("PC: 0x%08X\n", (unsigned int)current_pc);
+                printf("Instruction: 0x%08X\n", (unsigned int)instruction);
+                break;
+            }
+
+            steps++;
         }
 
-        steps++;
+        if (steps == MAX_STEPS)
+        {
+            printf("BIOS execution stopped: step limit reached.\n");
+        }
+
+        printf("Instructions executed: %u\n", (unsigned int)steps);
+        printf("Final PC: 0x%08X\n", (unsigned int)cpu.pc);
+        printf("Register t0: 0x%08X\n", (unsigned int)cpu.r[8]);
+        printf("Register at: 0x%08X\n", (unsigned int)cpu.r[1]);
+
+        printf("DMA0 MADR: 0x%08X\n", (unsigned int)memory.dma0_madr);
+        printf("DMA DPCR: 0x%08X\n", (unsigned int)memory.dma_dpcr);
+
+        return 0;
+
+    }
+    else
+    {
+        while (cpu.pc < program_size && steps < MAX_STEPS)
+        {
+            if (!cpu_step(&cpu, &memory))
+            {
+                fprintf(stderr, "Instruction execution failed.\n");
+                fprintf(stderr, "PC: 0x%08X\n", (unsigned int)cpu.pc);
+                return 1;
+            }
+
+            steps++;
+        }
     }
 
     uint32_t value_kseg0 = 0;
@@ -94,6 +147,21 @@ int main(int argc, char *argv[])
         memory_read32(&memory, 0x80000100, &value_kseg0) &&
         memory_read32(&memory, 0xA0000100, &value_kseg1) &&
         memory_read32(&memory, 0x00200100, &value_mirror);
+
+    uint32_t dma0_madr_value = 0;
+    uint32_t dma_dpcr_value = 0;
+
+    bool dma_register_test =
+        memory_write32(&memory, DMA0_MADR_ADDRESS, 0x0013243F) &&
+        memory_read32(&memory, DMA0_MADR_ADDRESS, &dma0_madr_value) &&
+        memory_write32(&memory, DMA_DPCR_ADDRESS, 0x00000B88) &&
+        memory_read32(&memory, DMA_DPCR_ADDRESS, &dma_dpcr_value);
+
+    if (dma_register_test)
+    {
+        printf("DMA0 MADR: 0x%08X\n", (unsigned int)dma0_madr_value);
+        printf("DMA DPCR: 0x%08X\n", (unsigned int)dma_dpcr_value);
+    }
 
     printf("KSEG0 read: 0x%08X\n", (unsigned int)value_kseg0);
     printf("KSEG1 read: 0x%08X\n", (unsigned int)value_kseg1);
@@ -107,6 +175,7 @@ int main(int argc, char *argv[])
         printf("BIOS entry instruction: 0x%08X\n", (unsigned int)bios_first_instruction);
     }
 
+    printf("Register v0: 0x%08X\n", (unsigned int)cpu.r[2]);
     printf("Register t0: %u\n", (unsigned int)cpu.r[8]);
     printf("Register t1: %u\n", (unsigned int)cpu.r[9]);
     printf("Register t2: %u\n", (unsigned int)cpu.r[10]);
@@ -120,7 +189,8 @@ int main(int argc, char *argv[])
     printf("Final PC: 0x%08X\n", (unsigned int)cpu.pc);
     printf("Instructions executed: %u\n", (unsigned int)steps);
 
-    if (cpu.r[8] != 5 ||
+    if (cpu.r[2] != 0x0013243F ||
+        cpu.r[8] != 5 ||
         cpu.r[9] != 5 ||
         cpu.r[10] != 99 ||
         cpu.r[11] != 7 ||
@@ -131,9 +201,10 @@ int main(int argc, char *argv[])
         cpu.r[16] != 0 ||
         cpu.r[17] != 55 ||
         cpu.pc != program_size ||
-        steps != 12 ||
+        steps != 14 ||
         cpu.branch_pending ||
-        !memory_alias_test)
+        !memory_alias_test ||
+        !dma_register_test)
     {
         fprintf(stderr, "CPU test failed.\n");
         return 1;

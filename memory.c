@@ -132,6 +132,70 @@ bool memory_read32(const Memory *memory, uint32_t address, uint32_t *value)
         return false;
     }
 
+    uint32_t physical_address = normalize_address(address);
+
+    switch (physical_address)
+    {
+        case EXP1_BASE_ADDRESS:
+            *value = memory->exp1_base;
+            return true;
+
+        case EXP2_BASE_ADDRESS:
+            *value = memory->exp2_base;
+            return true;
+
+        case EXP1_DELAY_ADDRESS:
+            *value = memory->exp1_delay;
+            return true;
+
+        case EXP3_DELAY_ADDRESS:
+            *value = memory->exp3_delay;
+            return true;
+
+        case BIOS_DELAY_ADDRESS:
+            *value = memory->bios_delay;
+            return true;
+
+        case SPU_DELAY_ADDRESS:
+            *value = memory->spu_delay;
+            return true;
+
+        case CDROM_DELAY_ADDRESS:
+            *value = memory->cdrom_delay;
+            return true;
+
+        case EXP2_DELAY_ADDRESS:
+            *value = memory->exp2_delay;
+            return true;
+
+        case COMMON_DELAY_ADDRESS:
+            *value = memory->common_delay;
+            return true;
+
+        case DRAM_CTRL_ADDRESS:
+            *value = memory->dram_ctrl;
+            return true;
+
+        case DMA0_MADR_ADDRESS:
+            *value = memory->dma0_madr;
+            return true;
+
+        case DMA0_BCR_ADDRESS:
+            *value = memory->dma0_bcr;
+            return true;
+
+        case DMA0_CHCR_ADDRESS:
+            *value = memory->dma0_chcr;
+            return true;
+
+        case DMA_DPCR_ADDRESS:
+            *value = memory->dma_dpcr;
+            return true;
+
+        default:
+            break;
+    }
+
     uint8_t b0;
     uint8_t b1;
     uint8_t b2;
@@ -152,6 +216,70 @@ bool memory_write32(Memory *memory, uint32_t address, uint32_t value)
     if ((address & 0x3u) != 0)
     {
         return false;
+    }
+
+    uint32_t physical_address = normalize_address(address);
+
+    switch (physical_address)
+    {
+        case EXP1_BASE_ADDRESS:
+            memory->exp1_base = value;
+            return true;
+
+        case EXP2_BASE_ADDRESS:
+            memory->exp2_base = value;
+            return true;
+
+        case EXP1_DELAY_ADDRESS:
+            memory->exp1_delay = value;
+            return true;
+
+        case EXP3_DELAY_ADDRESS:
+            memory->exp3_delay = value;
+            return true;
+
+        case BIOS_DELAY_ADDRESS:
+            memory->bios_delay = value;
+            return true;
+
+        case SPU_DELAY_ADDRESS:
+            memory->spu_delay = value;
+            return true;
+
+        case CDROM_DELAY_ADDRESS:
+            memory->cdrom_delay = value;
+            return true;
+
+        case EXP2_DELAY_ADDRESS:
+            memory->exp2_delay = value;
+            return true;
+
+        case COMMON_DELAY_ADDRESS:
+            memory->common_delay = value;
+            return true;
+
+        case DRAM_CTRL_ADDRESS:
+            memory->dram_ctrl = value;
+            return true;
+
+        case DMA0_MADR_ADDRESS:
+            memory->dma0_madr = value;
+            return true;
+
+        case DMA0_BCR_ADDRESS:
+            memory->dma0_bcr = value;
+            return true;
+
+        case DMA0_CHCR_ADDRESS:
+            memory->dma0_chcr = value;
+            return true;
+
+        case DMA_DPCR_ADDRESS:
+            memory->dma_dpcr = value;
+            return true;
+
+        default:
+            break;
     }
 
     // Validate the entire word before writing any bytes
