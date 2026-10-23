@@ -58,6 +58,7 @@ static bool translate_scratchpad_address(uint32_t address, uint32_t *offset)
 void memory_init(Memory *memory)
 {
     memset(memory, 0, sizeof(*memory));
+    memory->gpu_stat = 0x14802000u;
 }
 
 bool memory_load_bios(Memory *memory, const char *path)
@@ -69,7 +70,7 @@ bool memory_load_bios(Memory *memory, const char *path)
         return false;
     }
 
-    // Check that the BIOS file has the expected size
+    // verifica si el archivo de BIOS tiene el tamaño correspondiente
     if (fseek(file, 0, SEEK_END) != 0)
     {
         fclose(file);
@@ -213,7 +214,7 @@ bool memory_write8(Memory *memory, uint32_t address, uint8_t value)
         return true;
     }
 
-    /* MMIO no modelada: ignorar escritura en vez de fallar */
+    /* MMIO no diseñada, ignora escritura en vez de fallar */
     if (physical_address >= 0x1F801000u && physical_address < 0x1F804000u)
     {
         return true;
@@ -224,7 +225,7 @@ bool memory_write8(Memory *memory, uint32_t address, uint8_t value)
         return true;
     }
 
-    /* BIOS y regiones no mapeadas: fallo real */
+    /* BIOS y regiones no mapeadas  */
     return false;
 
 }
@@ -263,16 +264,6 @@ bool memory_write16(Memory *memory, uint32_t address, uint16_t value)
 
     if (!memory_write8(memory, address, (uint8_t)(value & 0xFF))) return false;
     if (!memory_write8(memory, address + 1, (uint8_t)(value >> 8))) return false;
-
-    /*if (!memory_write8(memory, address, (uint8_t)(value & 0xFFu)))
-    {
-        return false;
-    }
-
-    if (!memory_write8(memory, address + 1, (uint8_t)((value >> 8) & 0xFFu)))
-    {
-        return false;
-    }*/
 
     return true;
 }
@@ -381,6 +372,14 @@ bool memory_read32(const Memory *memory, uint32_t address, uint32_t *value)
             *value = memory->i_mask;
             return true;
 
+        case GP0_ADDRESS:
+            *value = memory->gpu_read;
+            return true;
+
+        case GP1_ADDRESS:
+            *value = memory->gpu_stat;
+            return true;
+
         default:
             break;
     }
@@ -487,6 +486,37 @@ bool memory_write32(Memory *memory, uint32_t address, uint32_t value)
             memory->i_mask = value;
             return true;
 
+        case GP0_ADDRESS:
+            memory->gp0_command = value;
+            /* si es un comando de lectura, preparar gpu_read | por ahora devuelve 0 en cualquier lectura */
+            memory->gpu_read = 0;
+            return true;
+
+        case GP1_ADDRESS:
+            memory->gp1_command = value;
+
+            // GP1 reset (0x00): el BIOS espera que GPUSTAT se resetee
+            if ((value & 0xFF000000u) == 0x00000000u)
+            {
+                memory->gpu_stat = 0x14802000u;
+                memory->gpu_read = 0;
+            }
+
+            // GP1 display enable (0x03): actualizar bit de display
+            if ((value & 0xFF000000u) == 0x03000000u)
+            {
+                if (value & 0x1)
+                {
+                    memory->gpu_stat |= 0x00800000u;   /* display enabled */
+                }
+                else
+                {
+                    memory->gpu_stat &= ~0x00800000u;
+                }
+            }
+
+            return true;
+
         default:
             break;
     }
@@ -499,7 +529,7 @@ bool memory_write32(Memory *memory, uint32_t address, uint32_t value)
         if (physical_address == base + 8) { memory->timer_target[t] = value;   return true; }
     }
 
-    // Validate the entire word before writing any bytes
+    // valida la palabra entera antes de escribir bytes
     uint32_t offset;
 
     if (translate_scratchpad_address(address, &offset))

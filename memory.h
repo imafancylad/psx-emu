@@ -51,6 +51,9 @@
 #define TIMER1_BASE 0x1F801110u
 #define TIMER2_BASE 0x1F801120u
 
+#define GP0_ADDRESS    0x1F801810u   /* write = GP0 command, read = GPUREAD */
+#define GP1_ADDRESS    0x1F801814u   /* write = GP1 control, read = GPUSTAT */
+
 typedef struct {
     uint8_t data[RAM_SIZE];
     uint8_t bios[BIOS_SIZE];
@@ -82,7 +85,12 @@ typedef struct {
     uint16_t timer_counter[3];
     uint16_t timer_mode[3];
     uint16_t timer_target[3];
-    uint32_t timer_cycles[3];   /* ciclos acumulados desde último tick */
+    uint32_t timer_cycles[3];   /* ciclos acumulados desde ultimo tick */
+
+    uint32_t gp0_command;
+    uint32_t gp1_command;
+    uint32_t gpu_read;
+    uint32_t gpu_stat;
 } Memory;
 
 void memory_init(Memory *memory);

@@ -3,7 +3,7 @@
 #include "cpu.h"
 #include "memory.h"
 
-#define MAX_STEPS 12000000
+#define MAX_STEPS 50000000
 #define TRACE_COUNT 32
 
 static void update_timers(Memory *memory, uint32_t cycles)
@@ -112,6 +112,7 @@ int main(int argc, char *argv[])
         static uint32_t last_pc = 0;
         static uint32_t same_pc_count = 0;
         static uint32_t vblank_counter = 0;
+        static uint32_t vblank_clear_pending = 0;
 
 
         while (steps < MAX_STEPS)
@@ -176,11 +177,20 @@ int main(int argc, char *argv[])
 
             update_timers(&memory, 1);
 
-            // VBlank cada ~73500 pasos (~60 Hz)
+            /* VBlank -> poner bit 0 y limpiarlo X pasos despues */
             if (++vblank_counter >= 73500)
             {
                 vblank_counter = 0;
-                memory.i_stat |= 0x1;               // bit 0 = VBlank
+                memory.i_stat |= 0x1;               /* VBlank ON */
+                vblank_clear_pending = 20000;
+            }
+
+            if (vblank_clear_pending > 0)
+            {
+                if (--vblank_clear_pending == 0)
+                {
+                    memory.i_stat &= ~0x1;          /* VBlank OFF */
+                }
             }
 
             if (cpu.pc == last_pc)

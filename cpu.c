@@ -104,8 +104,30 @@ static void hle_b0(CPU *cpu, Memory *memory, uint32_t syscall_num)
 {
     (void)memory;
     fprintf(stderr, "B0 syscall 0x%02X  ra=0x%08X\n", syscall_num, cpu->r[31]);
-    /* Igual que arriba: implementar los que aparezcan */
-    cpu->r[2] = 0;
+    
+    switch (syscall_num)
+    {
+        case 0x3D:
+            cpu->r[2] = 1;
+            break;
+
+        case 0x0C:
+            cpu->r[2] = 1;
+            break;
+
+        case 0x08:
+            cpu->r[2] = 0;
+            break;
+
+        case 0x00:
+            cpu->r[2] = 0;
+            break;
+
+        default:
+            cpu->r[2] = 0;
+            break;
+    }
+    
 }
 
 static void hle_c0(CPU *cpu, Memory *memory, uint32_t syscall_num)
@@ -318,7 +340,7 @@ bool cpu_step(CPU *cpu, Memory *memory)
         fprintf(stderr, "=== FIN DUMP 0xF80 ===\n\n");
     }
 
-    /* === DEBUG TEMPORAL: detectar entrada a 0xF00 === */
+    /* ---- DEBUG TEMPORAL: detectar entrada a 0xF00 ---- */
     if (cpu->pc >= 0x00000F00 && cpu->pc < 0x00001000)
     {
         if (!dead_zone_dumped)
@@ -358,7 +380,7 @@ bool cpu_step(CPU *cpu, Memory *memory)
         }
     }
 
-    /* Guardar esta instrucción en el ring buffer (antes de ejecutarla) */
+    /* Guardar esta instruccion en el buffer (antes de ejecutarla) */
     rb_pc[rb_idx]    = cpu->pc;
     rb_instr[rb_idx] = instruction;
     rb_ra[rb_idx]    = cpu->r[31];
@@ -380,7 +402,7 @@ bool cpu_step(CPU *cpu, Memory *memory)
         }
     }
 
-    /* Captura estado de delay slot ANTES de resetear */
+    /* captura estado de delay slot antes del reset */
     bool was_delay_slot = cpu->branch_pending;
     uint32_t delayed_target = cpu->branch_target;
 
@@ -539,7 +561,7 @@ bool cpu_step(CPU *cpu, Memory *memory)
                 cpu->branch_target  = cpu->pc + (uint32_t)(simm * 4);
                 cpu->branch_pending = true;
             }
-            /* Debug específico del bucle del BIOS */
+            /* Depuracion especifica del bucle del BIOS */
             if (current_pc == 0x000005B4)
             {
                 fprintf(stderr,
@@ -612,14 +634,13 @@ bool cpu_step(CPU *cpu, Memory *memory)
                     }
                     else
                     {
-                        fprintf(stderr, "UNKNOWN COP0 CO funct=0x%02X PC=0x%08X\n",
-                                (unsigned)(instruction & 0x3F), (unsigned)current_pc);
+                        fprintf(stderr, "UNKNOWN COP0 CO funct=0x%02X PC=0x%08X\n", (unsigned)(instruction & 0x3F), (unsigned)current_pc);
                         return false;
                     }
                     break;
+
                 default:
-                    fprintf(stderr, "UNKNOWN COP0 rs=0x%02X PC=0x%08X\n",
-                            (unsigned)rs, (unsigned)current_pc);
+                    fprintf(stderr, "UNKNOWN COP0 rs=0x%02X PC=0x%08X\n", (unsigned)rs, (unsigned)current_pc);
                     return false;
             }
             break;
@@ -628,11 +649,13 @@ bool cpu_step(CPU *cpu, Memory *memory)
             {
                 uint32_t addr = cpu->r[rs] + (uint32_t)simm;
                 uint8_t v;
-                if (!memory_read8(memory, addr, &v)) {
-                    fprintf(stderr, "LB fail PC=0x%08X addr=0x%08X\n",
-                            (unsigned)current_pc, (unsigned)addr);
+
+                if (!memory_read8(memory, addr, &v))
+                {
+                    fprintf(stderr, "LB fail PC=0x%08X addr=0x%08X\n", (unsigned)current_pc, (unsigned)addr);
                     return false;
                 }
+
                 cpu->r[rt] = (uint32_t)(int32_t)(int8_t)v;
             }
             break;
@@ -641,11 +664,13 @@ bool cpu_step(CPU *cpu, Memory *memory)
             {
                 uint32_t addr = cpu->r[rs] + (uint32_t)simm;
                 uint8_t v;
-                if (!memory_read8(memory, addr, &v)) {
-                    fprintf(stderr, "LBU fail PC=0x%08X addr=0x%08X\n",
-                            (unsigned)current_pc, (unsigned)addr);
+
+                if (!memory_read8(memory, addr, &v))
+                {
+                    fprintf(stderr, "LBU fail PC=0x%08X addr=0x%08X\n", (unsigned)current_pc, (unsigned)addr);
                     return false;
                 }
+
                 cpu->r[rt] = (uint32_t)v;
             }
             break;
@@ -654,9 +679,10 @@ bool cpu_step(CPU *cpu, Memory *memory)
             {
                 uint32_t addr = cpu->r[rs] + (uint32_t)simm;
                 uint16_t v;
-                if (!memory_read16(memory, addr, &v)) {  /* asegúrate de tener memory_read16 */
-                    fprintf(stderr, "LH fail PC=0x%08X addr=0x%08X\n",
-                            (unsigned)current_pc, (unsigned)addr);
+
+                if (!memory_read16(memory, addr, &v))
+                {  /* asegurarse de tener memory_read16 */
+                    fprintf(stderr, "LH fail PC=0x%08X addr=0x%08X\n", (unsigned)current_pc, (unsigned)addr);
                     return false;
                 }
                 cpu->r[rt] = (uint32_t)(int32_t)(int16_t)v;
@@ -667,11 +693,13 @@ bool cpu_step(CPU *cpu, Memory *memory)
             {
                 uint32_t addr = cpu->r[rs] + (uint32_t)simm;
                 uint16_t v;
-                if (!memory_read16(memory, addr, &v)) {
-                    fprintf(stderr, "LHU fail PC=0x%08X addr=0x%08X\n",
-                            (unsigned)current_pc, (unsigned)addr);
+
+                if (!memory_read16(memory, addr, &v))
+                {
+                    fprintf(stderr, "LHU fail PC=0x%08X addr=0x%08X\n", (unsigned)current_pc, (unsigned)addr);
                     return false;
                 }
+
                 cpu->r[rt] = (uint32_t)v;
             }
             break;
@@ -679,9 +707,10 @@ bool cpu_step(CPU *cpu, Memory *memory)
         case OPCODE_LW:
             {
                 uint32_t addr = cpu->r[rs] + (uint32_t)simm;
-                if (!memory_read32(memory, addr, &cpu->r[rt])) {
-                    fprintf(stderr, "LW fail PC=0x%08X addr=0x%08X\n",
-                            (unsigned)current_pc, (unsigned)addr);
+
+                if (!memory_read32(memory, addr, &cpu->r[rt]))
+                {
+                    fprintf(stderr, "LW fail PC=0x%08X addr=0x%08X\n", (unsigned)current_pc, (unsigned)addr);
                     return false;
                 }
             }
@@ -690,9 +719,10 @@ bool cpu_step(CPU *cpu, Memory *memory)
         case OPCODE_SB:
             {
                 uint32_t addr = cpu->r[rs] + (uint32_t)simm;
-                if (!memory_write8(memory, addr, (uint8_t)cpu->r[rt])) {
-                    fprintf(stderr, "SB fail PC=0x%08X addr=0x%08X\n",
-                            (unsigned)current_pc, (unsigned)addr);
+
+                if (!memory_write8(memory, addr, (uint8_t)cpu->r[rt]))
+                {
+                    fprintf(stderr, "SB fail PC=0x%08X addr=0x%08X\n", (unsigned)current_pc, (unsigned)addr);
                     return false;
                 }
             }
@@ -701,9 +731,10 @@ bool cpu_step(CPU *cpu, Memory *memory)
         case OPCODE_SH:
             {
                 uint32_t addr = cpu->r[rs] + (uint32_t)simm;
-                if (!memory_write16(memory, addr, (uint16_t)cpu->r[rt])) {
-                    fprintf(stderr, "SH fail PC=0x%08X addr=0x%08X\n",
-                            (unsigned)current_pc, (unsigned)addr);
+
+                if (!memory_write16(memory, addr, (uint16_t)cpu->r[rt]))
+                {
+                    fprintf(stderr, "SH fail PC=0x%08X addr=0x%08X\n", (unsigned)current_pc, (unsigned)addr);
                     return false;
                 }
             }
@@ -836,7 +867,7 @@ bool cpu_step(CPU *cpu, Memory *memory)
     if (pending && iec && im)
     {
         cpu->cp0[14] = current_pc;                                  // EPC
-        cpu->cp0[13] = (cpu->cp0[13] & ~0x7C) | 0x000;              // Cause: Int
+        cpu->cp0[13] = (cpu->cp0[13] & ~0x7C) | 0x400;              // IP2 (bit 10)
         cpu->cp0[12] = (sr & ~0x3Fu) | 0x2;                         // EXL=1, KUc=0
         uint32_t vector = (sr & 0x00400000) ? 0xBFC00180u : 0x80000080u;
         cpu->pc = vector;
