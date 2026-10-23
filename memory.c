@@ -104,7 +104,6 @@ bool memory_load_bios(Memory *memory, const char *path)
 bool memory_read8(const Memory *memory, uint32_t address, uint8_t *value)
 {
     uint32_t offset;
-
     uint32_t physical_address = normalize_address(address);
 
     if (physical_address >= EXP1_MEMORY_START && physical_address < EXP1_MEMORY_END)
@@ -155,6 +154,12 @@ bool memory_read8(const Memory *memory, uint32_t address, uint8_t *value)
     }
 
     if (physical_address >= 0x1F801000u && physical_address < 0x1F804000u)
+    {
+        *value = 0;
+        return true;
+    }
+
+    if (physical_address >= 0xC0000000u)
     {
         *value = 0;
         return true;
@@ -214,6 +219,11 @@ bool memory_write8(Memory *memory, uint32_t address, uint8_t value)
         return true;
     }
 
+    if (physical_address >= 0xC0000000u)
+    {
+        return true;
+    }
+
     /* BIOS y regiones no mapeadas: fallo real */
     return false;
 
@@ -221,6 +231,22 @@ bool memory_write8(Memory *memory, uint32_t address, uint8_t value)
 
 bool memory_write16(Memory *memory, uint32_t address, uint16_t value)
 {
+    if (address & 1) return false;
+    uint32_t physical = normalize_address(address);
+
+    if ((physical & ~1u) == I_STAT_ADDRESS)
+    {
+        memory->i_stat &= ~((uint32_t)value << ((address & 2) ? 16 : 0));
+        return true;
+    }
+
+    if ((physical & ~1u) == I_MASK_ADDRESS)
+    {
+        uint32_t shifted = (uint32_t)value << ((address & 2) ? 16 : 0);
+        memory->i_mask = (memory->i_mask & ~(0xFFFFu << ((address & 2) ? 16 : 0))) | shifted;
+        return true;
+    }
+
     if ((address & 0x1u) != 0)
     {
         return false;
@@ -235,7 +261,10 @@ bool memory_write16(Memory *memory, uint32_t address, uint16_t value)
         return true;
     }
 
-    if (!memory_write8(memory, address, (uint8_t)(value & 0xFFu)))
+    if (!memory_write8(memory, address, (uint8_t)(value & 0xFF))) return false;
+    if (!memory_write8(memory, address + 1, (uint8_t)(value >> 8))) return false;
+
+    /*if (!memory_write8(memory, address, (uint8_t)(value & 0xFFu)))
     {
         return false;
     }
@@ -243,19 +272,33 @@ bool memory_write16(Memory *memory, uint32_t address, uint16_t value)
     if (!memory_write8(memory, address + 1, (uint8_t)((value >> 8) & 0xFFu)))
     {
         return false;
-    }
+    }*/
 
     return true;
 }
 
 bool memory_read16(Memory *memory, uint32_t address, uint16_t *value)
 {
+    uint32_t physical = normalize_address(address);
+
+    if ((physical & ~1u) == I_STAT_ADDRESS)
+    {
+        *value = (address & 1) ? (memory->i_stat >> 16) : (memory->i_stat & 0xFFFF);
+        return true;
+    }
+
+    if ((physical & ~1u) == I_MASK_ADDRESS)
+    {
+        *value = (address & 1) ? (memory->i_mask >> 16) : (memory->i_mask & 0xFFFF);
+        return true;
+    }
+
     uint8_t lo, hi;
 
     if (!memory_read8(memory, address,     &lo)) return false;
     if (!memory_read8(memory, address + 1, &hi)) return false;
-
-    *value = (uint16_t)((uint16_t)lo | ((uint16_t)hi << 8));
+    *value = (uint16_t)lo | ((uint16_t)hi << 8);
+    
     return true;
 }
 
@@ -330,8 +373,24 @@ bool memory_read32(const Memory *memory, uint32_t address, uint32_t *value)
             *value = memory->bcc;
             return true;
 
+        case I_STAT_ADDRESS:
+            *value = memory->i_stat;
+            return true;
+
+        case I_MASK_ADDRESS:
+            *value = memory->i_mask;
+            return true;
+
         default:
             break;
+    }
+
+    for (int t = 0; t < 3; t++)
+    {
+        uint32_t base = TIMER0_BASE + t * 0x10;
+        if (physical_address == base + 0) { *value = memory->timer_counter[t]; return true; }
+        if (physical_address == base + 4) { *value = memory->timer_mode[t];    return true; }
+        if (physical_address == base + 8) { *value = memory->timer_target[t];  return true; }
     }
 
     uint8_t b0;
@@ -420,8 +479,24 @@ bool memory_write32(Memory *memory, uint32_t address, uint32_t value)
             memory->bcc = value;
             return true;
 
+        case I_STAT_ADDRESS:
+            memory->i_stat &= ~value;
+            return true;
+
+        case I_MASK_ADDRESS:
+            memory->i_mask = value;
+            return true;
+
         default:
             break;
+    }
+
+    for (int t = 0; t < 3; t++)
+    {
+        uint32_t base = TIMER0_BASE + t * 0x10;
+        if (physical_address == base + 0) { memory->timer_counter[t] = 0;      return true; }
+        if (physical_address == base + 4) { memory->timer_mode[t] = value;     return true; }
+        if (physical_address == base + 8) { memory->timer_target[t] = value;   return true; }
     }
 
     // Validate the entire word before writing any bytes
@@ -442,15 +517,19 @@ bool memory_write32(Memory *memory, uint32_t address, uint32_t value)
         return true;
     }
 
-    if (!translate_ram_address(address, &offset) || offset > RAM_SIZE - 4)
+    if (translate_ram_address(address, &offset) && offset <= RAM_SIZE - 4)
     {
-        return false;
+        memory->data[offset]     = (uint8_t)(value & 0xFFu);
+        memory->data[offset + 1] = (uint8_t)((value >> 8) & 0xFFu);
+        memory->data[offset + 2] = (uint8_t)((value >> 16) & 0xFFu);
+        memory->data[offset + 3] = (uint8_t)((value >> 24) & 0xFFu);
+        return true;
     }
 
-    memory->data[offset] = (uint8_t)(value & 0xFFu);
-    memory->data[offset + 1] = (uint8_t)((value >> 8) & 0xFFu);
-    memory->data[offset + 2] = (uint8_t)((value >> 16) & 0xFFu);
-    memory->data[offset + 3] = (uint8_t)((value >> 24) & 0xFFu);
+    if (physical_address >= 0xC0000000u)
+    {
+        return true;
+    }
 
-    return true;
+    return false;
 }

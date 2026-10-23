@@ -6,6 +6,28 @@
 #define MAX_STEPS 12000000
 #define TRACE_COUNT 32
 
+static void update_timers(Memory *memory, uint32_t cycles)
+{
+    for (int t = 0; t < 3; t++)
+    {
+        uint16_t mode = memory->timer_mode[t];
+        if (!(mode & 0x10)) continue;                           /* bit 4 = enable */
+
+        int step = 1;
+        if (t == 2) step = 1;                                   /* sysclk/8, simplificado */
+
+        memory->timer_counter[t] += step;
+
+        uint16_t target = memory->timer_target[t];
+        if (target != 0 && memory->timer_counter[t] >= target)
+        {
+            memory->i_stat |= (1u << (4 + t));                  /* bits 4,5,6 = timer IRQ */
+            if (!(mode & 0x08)) memory->timer_counter[t] = 0;   /* one-shot */
+            else memory->timer_counter[t] -= target;            /* repeat */
+        }
+    }
+}
+
 int main(int argc, char *argv[])
 {
     CPU cpu;
@@ -87,6 +109,11 @@ int main(int argc, char *argv[])
         printf("Starting BIOS execution.\n");
         printf("Initial PC: 0x%08X\n", (unsigned int)cpu.pc);
 
+        static uint32_t last_pc = 0;
+        static uint32_t same_pc_count = 0;
+        static uint32_t vblank_counter = 0;
+
+
         while (steps < MAX_STEPS)
         {
             uint32_t current_pc = cpu.pc;
@@ -127,8 +154,48 @@ int main(int argc, char *argv[])
 
                 break;
             }
-
+            
             steps++;
+
+            static int low_pc_count = 0;
+            
+            if (cpu.pc < 0x00001000)
+            {
+                low_pc_count++;
+
+                if (low_pc_count > 100000)
+                {
+                    fprintf(stderr, "DETENIDO: PC bajo 0x1000 durante 100k steps, PC=0x%08X\n", (unsigned)cpu.pc);
+                    break;
+                }
+            }
+            else
+            {
+                low_pc_count = 0;
+            }
+
+            update_timers(&memory, 1);
+
+            // VBlank cada ~73500 pasos (~60 Hz)
+            if (++vblank_counter >= 73500)
+            {
+                vblank_counter = 0;
+                memory.i_stat |= 0x1;               // bit 0 = VBlank
+            }
+
+            if (cpu.pc == last_pc)
+            {
+                if (++same_pc_count > 1000000)
+                {
+                    fprintf(stderr, "BUCLE INFINITO en PC=0x%08X\n", (unsigned)cpu.pc);
+                    break;
+                }
+            }
+            else
+            {
+                same_pc_count = 0;
+                last_pc = cpu.pc;
+            }
         }
 
         if (steps == MAX_STEPS)

@@ -44,6 +44,13 @@
 #define DMA_DPCR_ADDRESS  0x1F8010F0u
 #define BCC_ADDRESS 0xFFFE0130u
 
+#define I_STAT_ADDRESS 0x1F801070u   /* Interrupt Status (write-1-to-clear) */
+#define I_MASK_ADDRESS 0x1F801074u   /* Interrupt Mask */
+
+#define TIMER0_BASE 0x1F801100u
+#define TIMER1_BASE 0x1F801110u
+#define TIMER2_BASE 0x1F801120u
+
 typedef struct {
     uint8_t data[RAM_SIZE];
     uint8_t bios[BIOS_SIZE];
@@ -68,6 +75,14 @@ typedef struct {
     uint32_t dma0_chcr;
     uint32_t dma_dpcr;
     uint32_t bcc;
+
+    uint32_t i_stat;
+    uint32_t i_mask;
+
+    uint16_t timer_counter[3];
+    uint16_t timer_mode[3];
+    uint16_t timer_target[3];
+    uint32_t timer_cycles[3];   /* ciclos acumulados desde último tick */
 } Memory;
 
 void memory_init(Memory *memory);
