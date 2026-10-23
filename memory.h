@@ -78,5 +78,6 @@ bool memory_write8(Memory *memory, uint32_t address, uint8_t value);
 bool memory_read32(const Memory *memory, uint32_t address, uint32_t *value);
 bool memory_write32(Memory *memory, uint32_t address, uint32_t value);
 bool memory_write16(Memory *memory, uint32_t address, uint16_t value);
+bool memory_read16(Memory *memory, uint32_t address, uint16_t *value);
 
 #endif

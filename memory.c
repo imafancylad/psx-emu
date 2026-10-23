@@ -44,6 +44,8 @@ static bool translate_bios_address(uint32_t address, uint32_t *offset)
 
 static bool translate_scratchpad_address(uint32_t address, uint32_t *offset)
 {
+    address = normalize_address(address);
+
     if (address < SCRATCHPAD_START || address >= SCRATCHPAD_END)
     {
         return false;
@@ -152,6 +154,12 @@ bool memory_read8(const Memory *memory, uint32_t address, uint8_t *value)
         return true;
     }
 
+    if (physical_address >= 0x1F801000u && physical_address < 0x1F804000u)
+    {
+        *value = 0;
+        return true;
+    }
+
     return false;
 }
 
@@ -194,18 +202,21 @@ bool memory_write8(Memory *memory, uint32_t address, uint8_t value)
         return true;
     }
 
-    if (!translate_ram_address(address, &offset))
+        if (translate_ram_address(address, &offset))
     {
-        /*
-         * The BIOS and unimplemented regions are read-only
-         * or unavailable in this memory model.
-         */
-        return false;
+        memory->data[offset] = value;
+        return true;
     }
 
-    memory->data[offset] = value;
+    /* MMIO no modelada: ignorar escritura en vez de fallar */
+    if (physical_address >= 0x1F801000u && physical_address < 0x1F804000u)
+    {
+        return true;
+    }
 
-    return true;
+    /* BIOS y regiones no mapeadas: fallo real */
+    return false;
+
 }
 
 bool memory_write16(Memory *memory, uint32_t address, uint16_t value)
@@ -234,6 +245,17 @@ bool memory_write16(Memory *memory, uint32_t address, uint16_t value)
         return false;
     }
 
+    return true;
+}
+
+bool memory_read16(Memory *memory, uint32_t address, uint16_t *value)
+{
+    uint8_t lo, hi;
+
+    if (!memory_read8(memory, address,     &lo)) return false;
+    if (!memory_read8(memory, address + 1, &hi)) return false;
+
+    *value = (uint16_t)((uint16_t)lo | ((uint16_t)hi << 8));
     return true;
 }
 
