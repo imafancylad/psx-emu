@@ -107,6 +107,26 @@ bool memory_read8(const Memory *memory, uint32_t address, uint8_t *value)
     uint32_t offset;
     uint32_t physical_address = normalize_address(address);
 
+    // CDROM
+    switch (physical_address)
+    {
+        case 0x1F801800u:
+            *value = memory->cdrom_index & 0x3;
+            return true;
+
+        case 0x1F801801u:
+            *value = 0;   /* FIFO: no hay CD */
+            return true;
+
+        case 0x1F801802u:
+            *value = 0;   /* data FIFO */
+            return true;
+
+        case 0x1F801803u:
+            *value = (memory->cdrom_irq_enable & 0x1F) | (memory->cdrom_irq_flags & 0xE0);
+            return true;
+    }
+
     if (physical_address >= EXP1_MEMORY_START && physical_address < EXP1_MEMORY_END)
     {
         *value = 0;
@@ -173,6 +193,41 @@ bool memory_write8(Memory *memory, uint32_t address, uint8_t value)
 {
     uint32_t offset;
     uint32_t physical_address = normalize_address(address);
+
+    // CDROM
+    switch (physical_address)
+    {
+        case 0x1F801800u:
+            memory->cdrom_index = value & 0x3;
+            return true;
+
+        case 0x1F801801u:
+            memory->cdrom_command = value;
+            memory->cdrom_irq_flags |= 0x01;   /* INT1: "respuesta lista" */
+            return true;
+
+        case 0x1F801802u:
+
+            if (memory->cdrom_param_count < 16)
+            {
+                memory->cdrom_param[memory->cdrom_param_count++] = value;
+            }
+
+            return true;
+
+        case 0x1F801803u:
+
+            if ((memory->cdrom_index & 0x3) == 0 || (memory->cdrom_index & 0x3) == 2)
+            {
+                memory->cdrom_irq_enable = value & 0x1F;
+            }
+            else
+            {
+                memory->cdrom_irq_flags &= ~(value & 0xE0);
+            }
+
+            return true;
+    }
 
     if (physical_address >= EXP1_MEMORY_START && physical_address < EXP1_MEMORY_END)
     {
@@ -360,6 +415,30 @@ bool memory_read32(const Memory *memory, uint32_t address, uint32_t *value)
             *value = memory->dma_dpcr;
             return true;
 
+        case DMA1_MADR_ADDRESS: *value = memory->dma1_madr; return true;
+        case DMA1_BCR_ADDRESS:  *value = memory->dma1_bcr;  return true;
+        case DMA1_CHCR_ADDRESS: *value = memory->dma1_chcr; return true;
+
+        case DMA2_MADR_ADDRESS: *value = memory->dma2_madr; return true;
+        case DMA2_BCR_ADDRESS:  *value = memory->dma2_bcr;  return true;
+        case DMA2_CHCR_ADDRESS: *value = memory->dma2_chcr; return true;
+
+        case DMA3_MADR_ADDRESS: *value = memory->dma3_madr; return true;
+        case DMA3_BCR_ADDRESS:  *value = memory->dma3_bcr;  return true;
+        case DMA3_CHCR_ADDRESS: *value = memory->dma3_chcr; return true;
+
+        case DMA4_MADR_ADDRESS: *value = memory->dma4_madr; return true;
+        case DMA4_BCR_ADDRESS:  *value = memory->dma4_bcr;  return true;
+        case DMA4_CHCR_ADDRESS: *value = memory->dma4_chcr; return true;
+
+        case DMA5_MADR_ADDRESS: *value = memory->dma5_madr; return true;
+        case DMA5_BCR_ADDRESS:  *value = memory->dma5_bcr;  return true;
+        case DMA5_CHCR_ADDRESS: *value = memory->dma5_chcr; return true;
+
+        case DMA6_MADR_ADDRESS: *value = memory->dma6_madr; return true;
+        case DMA6_BCR_ADDRESS:  *value = memory->dma6_bcr;  return true;
+        case DMA6_CHCR_ADDRESS: *value = memory->dma6_chcr; return true;
+
         case BCC_ADDRESS:
             *value = memory->bcc;
             return true;
@@ -378,6 +457,10 @@ bool memory_read32(const Memory *memory, uint32_t address, uint32_t *value)
 
         case GP1_ADDRESS:
             *value = memory->gpu_stat;
+            return true;
+
+        case DMA_DICR_ADDRESS:
+            *value = memory->dma_dicr;
             return true;
 
         default:
@@ -467,11 +550,109 @@ bool memory_write32(Memory *memory, uint32_t address, uint32_t value)
             return true;
 
         case DMA0_CHCR_ADDRESS:
-            memory->dma0_chcr = value;
+            if (value & 0x10000000u)
+            {
+                memory->dma0_chcr = 0;
+                memory->dma_dicr |= (1u << 24);
+            }
+            else
+            {
+                memory->dma0_chcr = value;
+            }
             return true;
 
         case DMA_DPCR_ADDRESS:
             memory->dma_dpcr = value;
+            return true;
+
+        case DMA1_MADR_ADDRESS: memory->dma1_madr = value; return true;
+        case DMA1_BCR_ADDRESS:  memory->dma1_bcr  = value; return true;
+        
+        case DMA1_CHCR_ADDRESS:
+            if (value & 0x10000000u)
+            {
+                memory->dma1_chcr = 0;
+                memory->dma_dicr |= (1u << 25);
+            }
+            else
+            {
+                memory->dma1_chcr = value;
+            }
+            return true;
+
+        case DMA2_MADR_ADDRESS: memory->dma2_madr = value; return true;
+        case DMA2_BCR_ADDRESS:  memory->dma2_bcr  = value; return true;
+        
+        case DMA2_CHCR_ADDRESS:
+            if (value & 0x10000000u)
+            {
+                memory->dma2_chcr = 0;
+                memory->dma_dicr |= (1u << 26);
+            }
+            else
+            {
+                memory->dma2_chcr = value;
+            }
+            return true;
+
+        case DMA3_MADR_ADDRESS: memory->dma3_madr = value; return true;
+        case DMA3_BCR_ADDRESS:  memory->dma3_bcr  = value; return true;
+        
+        case DMA3_CHCR_ADDRESS:
+            if (value & 0x10000000u)
+            {
+                memory->dma3_chcr = 0;
+                memory->dma_dicr |= (1u << 27);
+            }
+            else
+            {
+                memory->dma3_chcr = value;
+            }
+            return true;
+
+        case DMA4_MADR_ADDRESS: memory->dma4_madr = value; return true;
+        case DMA4_BCR_ADDRESS:  memory->dma4_bcr  = value; return true;
+
+        case DMA4_CHCR_ADDRESS:
+            if (value & 0x10000000u)
+            {
+                memory->dma4_chcr = 0;
+                memory->dma_dicr |= (1u << 28);
+            }
+            else
+            {
+                memory->dma4_chcr = value;
+            }
+            return true;
+
+        case DMA5_MADR_ADDRESS: memory->dma5_madr = value; return true;
+        case DMA5_BCR_ADDRESS:  memory->dma5_bcr  = value; return true;
+
+        case DMA5_CHCR_ADDRESS:
+            if (value & 0x10000000u)
+            {
+                memory->dma5_chcr = 0;
+                memory->dma_dicr |= (1u << 29);
+            }
+            else
+            {
+                memory->dma5_chcr = value;
+            }
+            return true;
+
+        case DMA6_MADR_ADDRESS: memory->dma6_madr = value; return true;
+        case DMA6_BCR_ADDRESS:  memory->dma6_bcr  = value; return true;
+        
+        case DMA6_CHCR_ADDRESS:
+            if (value & 0x10000000u) /* bit 28 = start */
+            {
+                memory->dma6_chcr = 0;
+                memory->dma_dicr |= (1u << 30);
+            }
+            else
+            {
+                memory->dma6_chcr = value;
+            }
             return true;
 
         case BCC_ADDRESS:
@@ -515,6 +696,11 @@ bool memory_write32(Memory *memory, uint32_t address, uint32_t value)
                 }
             }
 
+            return true;
+
+        case DMA_DICR_ADDRESS:
+            memory->dma_dicr = (memory->dma_dicr & ~0x00FFFFFFu) | (value & 0x00FF0000u);
+            memory->dma_dicr &= ~(value & 0xFF000000u);
             return true;
 
         default:

@@ -81,15 +81,35 @@ static void hle_a0(CPU *cpu, Memory *memory, uint32_t syscall_num)
 
     switch (syscall_num)
     {
-        case 0x44: // el bug actual
+        case 0x44: /* el bug actual */
             cpu->r[2] = 0;
             break;
 
-        case 0x3F: // flushCache --> no-op: no tenemos cache
+        case 0x3F: /* flushcache --> no-op: no tenemos cache */
             cpu->r[2] = 0;
             break;
 
-        case 0x18: // malloc --> gestion de memoria
+        case 0x18: /* malloc --> gestion de memoria */
+            cpu->r[2] = 0;
+            break;
+
+        case 0x49:  /* cdinit */
+            cpu->r[2] = 1;   /* :D salio guay */
+            break;
+
+        case 0x28:  /* cdsync */
+            cpu->r[2] = 0;   /* no hay CD */
+            break;
+        
+        case 0x39:  /* devolver puntero de inicio */
+            cpu->r[2] = cpu->r[4];
+            break;
+        
+        case 0x72:  /* ? */
+        case 0x1B:  /* ? */
+        case 0x2A:  /* ? */
+        
+        case 0x13:  /* ? */
             cpu->r[2] = 0;
             break;
 
@@ -151,6 +171,7 @@ bool cpu_step(CPU *cpu, Memory *memory)
     static int dumped_a0 = 0;
     static int dumped_5c4 = 0;
     static int dumped_f80 = 0;
+    static int dumped_510f0 = 0;
 
     uint32_t instruction;
 
@@ -181,6 +202,19 @@ bool cpu_step(CPU *cpu, Memory *memory)
     if (!memory_read32(memory, cpu->pc, &instruction))
     {
         return false;
+    }
+
+    if (cpu->pc == 0x800510F0 && !dumped_510f0)
+    {
+        dumped_510f0 = 1;
+        uint32_t ptr = 0;
+
+        memory_read32(memory, 0x800792B0, &ptr);
+
+        uint32_t val = 0;
+
+        if (ptr) memory_read32(memory, ptr, &val);
+        fprintf(stderr, "DMA POLL LOOP: *(0x800792B0)=0x%08X, *(ptr)=0x%08X\n", (unsigned)ptr, (unsigned)val);
     }
 
     if (cpu->pc == 0x00000EB0 && !dumped_eb0)

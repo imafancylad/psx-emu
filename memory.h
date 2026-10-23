@@ -54,11 +54,49 @@
 #define GP0_ADDRESS    0x1F801810u   /* write = GP0 command, read = GPUREAD */
 #define GP1_ADDRESS    0x1F801814u   /* write = GP1 control, read = GPUSTAT */
 
+#define DMA_DICR_ADDRESS  0x1F8010F4u
+
+#define DMA1_MADR_ADDRESS 0x1F801090u
+#define DMA1_BCR_ADDRESS  0x1F801094u
+#define DMA1_CHCR_ADDRESS 0x1F801098u
+
+#define DMA2_MADR_ADDRESS 0x1F8010A0u
+#define DMA2_BCR_ADDRESS  0x1F8010A4u
+#define DMA2_CHCR_ADDRESS 0x1F8010A8u
+
+#define DMA3_MADR_ADDRESS 0x1F8010B0u
+#define DMA3_BCR_ADDRESS  0x1F8010B4u
+#define DMA3_CHCR_ADDRESS 0x1F8010B8u
+
+#define DMA4_MADR_ADDRESS 0x1F8010C0u
+#define DMA4_BCR_ADDRESS  0x1F8010C4u
+#define DMA4_CHCR_ADDRESS 0x1F8010C8u
+
+#define DMA5_MADR_ADDRESS 0x1F8010D0u
+#define DMA5_BCR_ADDRESS  0x1F8010D4u
+#define DMA5_CHCR_ADDRESS 0x1F8010D8u
+
+#define DMA6_MADR_ADDRESS 0x1F8010E0u
+#define DMA6_BCR_ADDRESS  0x1F8010E4u
+#define DMA6_CHCR_ADDRESS 0x1F8010E8u
+
+#define CDROM_BASE 0x1F801800u
+
 typedef struct {
     uint8_t data[RAM_SIZE];
     uint8_t bios[BIOS_SIZE];
     uint8_t scratchpad[SCRATCHPAD_SIZE];
     uint8_t exp2_memory[EXP2_MEMORY_SIZE];
+
+    uint8_t cdrom_index;
+    uint8_t cdrom_status;
+    uint8_t cdrom_command;
+    uint8_t cdrom_param[16];
+    uint8_t cdrom_response[16];
+    uint8_t cdrom_irq_enable;
+    uint8_t cdrom_irq_flags;
+    uint8_t cdrom_param_count;
+    uint8_t cdrom_response_count;
 
     uint16_t spu_registers[SPU_REGISTERS_COUNT];
 
@@ -77,6 +115,14 @@ typedef struct {
     uint32_t dma0_bcr;
     uint32_t dma0_chcr;
     uint32_t dma_dpcr;
+
+    uint32_t dma1_madr, dma1_bcr, dma1_chcr;
+    uint32_t dma2_madr, dma2_bcr, dma2_chcr;
+    uint32_t dma3_madr, dma3_bcr, dma3_chcr;
+    uint32_t dma4_madr, dma4_bcr, dma4_chcr;
+    uint32_t dma5_madr, dma5_bcr, dma5_chcr;
+    uint32_t dma6_madr, dma6_bcr, dma6_chcr;
+    uint32_t dma_dicr;
     uint32_t bcc;
 
     uint32_t i_stat;
