@@ -58,7 +58,7 @@ static bool translate_scratchpad_address(uint32_t address, uint32_t *offset)
 void memory_init(Memory *memory)
 {
     memset(memory, 0, sizeof(*memory));
-    memory->gpu_stat = 0x14802000u;
+    memory->gpu_stat = 0x1C802000u;
 }
 
 bool memory_load_bios(Memory *memory, const char *path)
@@ -456,7 +456,7 @@ bool memory_read32(const Memory *memory, uint32_t address, uint32_t *value)
             return true;
 
         case GP1_ADDRESS:
-            *value = memory->gpu_stat;
+            *value = memory->gpu_stat | 0x1C000000u; /* forzar bits siempre a 1 */
             return true;
 
         case DMA_DICR_ADDRESS:
@@ -550,14 +550,12 @@ bool memory_write32(Memory *memory, uint32_t address, uint32_t value)
             return true;
 
         case DMA0_CHCR_ADDRESS:
+            memory->dma0_chcr = value & ~0x01000000u;   /* ignorar busy (read-only) */
+
             if (value & 0x10000000u)
             {
                 memory->dma0_chcr = 0;
                 memory->dma_dicr |= (1u << 24);
-            }
-            else
-            {
-                memory->dma0_chcr = value;
             }
             return true;
 
@@ -569,14 +567,12 @@ bool memory_write32(Memory *memory, uint32_t address, uint32_t value)
         case DMA1_BCR_ADDRESS:  memory->dma1_bcr  = value; return true;
         
         case DMA1_CHCR_ADDRESS:
+            memory->dma1_chcr = value & ~0x01000000u;
+
             if (value & 0x10000000u)
             {
                 memory->dma1_chcr = 0;
                 memory->dma_dicr |= (1u << 25);
-            }
-            else
-            {
-                memory->dma1_chcr = value;
             }
             return true;
 
@@ -584,14 +580,12 @@ bool memory_write32(Memory *memory, uint32_t address, uint32_t value)
         case DMA2_BCR_ADDRESS:  memory->dma2_bcr  = value; return true;
         
         case DMA2_CHCR_ADDRESS:
+            memory->dma2_chcr = value & ~0x01000000u;
+
             if (value & 0x10000000u)
             {
                 memory->dma2_chcr = 0;
                 memory->dma_dicr |= (1u << 26);
-            }
-            else
-            {
-                memory->dma2_chcr = value;
             }
             return true;
 
@@ -599,14 +593,12 @@ bool memory_write32(Memory *memory, uint32_t address, uint32_t value)
         case DMA3_BCR_ADDRESS:  memory->dma3_bcr  = value; return true;
         
         case DMA3_CHCR_ADDRESS:
+            memory->dma3_chcr = value & ~0x01000000u;
+
             if (value & 0x10000000u)
             {
                 memory->dma3_chcr = 0;
                 memory->dma_dicr |= (1u << 27);
-            }
-            else
-            {
-                memory->dma3_chcr = value;
             }
             return true;
 
@@ -614,14 +606,12 @@ bool memory_write32(Memory *memory, uint32_t address, uint32_t value)
         case DMA4_BCR_ADDRESS:  memory->dma4_bcr  = value; return true;
 
         case DMA4_CHCR_ADDRESS:
+            memory->dma4_chcr = value & ~0x01000000u;
+
             if (value & 0x10000000u)
             {
                 memory->dma4_chcr = 0;
                 memory->dma_dicr |= (1u << 28);
-            }
-            else
-            {
-                memory->dma4_chcr = value;
             }
             return true;
 
@@ -629,14 +619,12 @@ bool memory_write32(Memory *memory, uint32_t address, uint32_t value)
         case DMA5_BCR_ADDRESS:  memory->dma5_bcr  = value; return true;
 
         case DMA5_CHCR_ADDRESS:
+            memory->dma5_chcr = value & ~0x01000000u;
+
             if (value & 0x10000000u)
             {
                 memory->dma5_chcr = 0;
                 memory->dma_dicr |= (1u << 29);
-            }
-            else
-            {
-                memory->dma5_chcr = value;
             }
             return true;
 
@@ -644,14 +632,12 @@ bool memory_write32(Memory *memory, uint32_t address, uint32_t value)
         case DMA6_BCR_ADDRESS:  memory->dma6_bcr  = value; return true;
         
         case DMA6_CHCR_ADDRESS:
-            if (value & 0x10000000u) /* bit 28 = start */
+            memory->dma6_chcr = value & ~0x01000000u;
+
+            if (value & 0x10000000u)
             {
                 memory->dma6_chcr = 0;
                 memory->dma_dicr |= (1u << 30);
-            }
-            else
-            {
-                memory->dma6_chcr = value;
             }
             return true;
 
@@ -679,7 +665,7 @@ bool memory_write32(Memory *memory, uint32_t address, uint32_t value)
             // GP1 reset (0x00): el BIOS espera que GPUSTAT se resetee
             if ((value & 0xFF000000u) == 0x00000000u)
             {
-                memory->gpu_stat = 0x14802000u;
+                memory->gpu_stat = 0x1C802000u;
                 memory->gpu_read = 0;
             }
 

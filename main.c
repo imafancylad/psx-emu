@@ -113,6 +113,7 @@ int main(int argc, char *argv[])
         static uint32_t same_pc_count = 0;
         static uint32_t vblank_counter = 0;
         static uint32_t vblank_clear_pending = 0;
+        static uint32_t vblank_hle_count = 0;
 
 
         while (steps < MAX_STEPS)
@@ -158,6 +159,16 @@ int main(int argc, char *argv[])
             
             steps++;
 
+            if (cpu.pc >= 0x80059DC8 && cpu.pc <= 0x80059E10)
+            {
+                uint32_t target = cpu.r[5];
+
+                if (target > 0)
+                {
+                    memory_write32(&memory, 0x80079D9C, target);
+                }
+            }
+
             static int low_pc_count = 0;
             
             if (cpu.pc < 0x00001000)
@@ -183,6 +194,10 @@ int main(int argc, char *argv[])
                 vblank_counter = 0;
                 memory.i_stat |= 0x1;               /* VBlank ON */
                 vblank_clear_pending = 20000;
+
+                /* HLE: incrementar el contador de VBlanks que el BIOS espera */
+                vblank_hle_count++;
+                memory_write32(&memory, 0x80079D9C, vblank_hle_count);
             }
 
             if (vblank_clear_pending > 0)

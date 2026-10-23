@@ -172,6 +172,9 @@ bool cpu_step(CPU *cpu, Memory *memory)
     static int dumped_5c4 = 0;
     static int dumped_f80 = 0;
     static int dumped_510f0 = 0;
+    static int dumped_59dc8 = 0;
+    static int dumped_509ac = 0;
+    static int dumped_59e0c = 0;
 
     uint32_t instruction;
 
@@ -202,6 +205,43 @@ bool cpu_step(CPU *cpu, Memory *memory)
     if (!memory_read32(memory, cpu->pc, &instruction))
     {
         return false;
+    }
+
+    if (cpu->pc == 0x80059E0C && !dumped_59e0c)
+    {
+        dumped_59e0c = 1;
+        fprintf(stderr,
+            "BUCLE 0x80059E0C: a1=0x%08X t0=0x%08X (contador VBlank) "
+            "i_stat=0x%08X i_mask=0x%08X\n",
+            (unsigned)cpu->r[5], (unsigned)cpu->r[8],
+            (unsigned)memory->i_stat, (unsigned)memory->i_mask);
+    }
+
+    if (cpu->pc == 0x800509AC && !dumped_509ac)
+    {
+        dumped_509ac = 1;
+        uint32_t t6 = cpu->r[14];   /* t6 */
+        uint32_t val = 0;
+
+        if (memory_read32(memory, t6, &val))
+        {
+            fprintf(stderr, "BUCLE 0x800509AC: t6=0x%08X, *(t6)=0x%08X\n", (unsigned)t6, (unsigned)val);
+        }
+        else
+        {
+            fprintf(stderr, "BUCLE 0x800509AC: t6=0x%08X (read failed)\n", (unsigned)t6);
+        }
+    }
+
+    if (cpu->pc == 0x80059DC8 && !dumped_59dc8)
+    {
+        dumped_59dc8 = 1;
+        uint32_t var = 0;
+        memory_read32(memory, 0x80079D9C, &var);
+        uint32_t i_stat = 0, i_mask = 0;
+        memory_read32(memory, I_STAT_ADDRESS, &i_stat);
+        memory_read32(memory, I_MASK_ADDRESS, &i_mask);
+        fprintf(stderr, "BUCLE 0x80059DC8: *(0x80079D9C)=0x%08X " "SR=0x%08X Cause=0x%08X i_stat=0x%08X i_mask=0x%08X\n", (unsigned)var, (unsigned)cpu->cp0[12], (unsigned)cpu->cp0[13], (unsigned)i_stat, (unsigned)i_mask);
     }
 
     if (cpu->pc == 0x800510F0 && !dumped_510f0)
